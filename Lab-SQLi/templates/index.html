@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es">
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Laboratorio SQL · Vivero Florida</title><link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}"></head>
+<body><main>
+<header><p class="tag">LABORATORIO LOCAL · NIVEL INICIAL</p><h1>¿Datos o instrucciones?</h1><p>Explora una inyección SQL en el vivero ficticio y compara la misma entrada en dos consultas.</p></header>
+<aside><strong>Entorno aislado: 127.0.0.1</strong> · Solo datos inventados. Cada consulta recibe una base nueva en memoria. No hay destinos externos ni conexión a bases reales.</aside>
+<section><h2>1. Prepara la entrada</h2><p>Acceso de ejemplo: <code>ana</code> / <code>semilla123</code>. La clave se muestra porque es un dato didáctico ficticio; no escribas claves reales.</p>
+<form method="post"><input type="hidden" name="csrf" value="{{ session.csrf }}">
+<div class="inputs"><label>Usuario<input name="usuario" value="{{ username }}" maxlength="160" autocomplete="off"></label><label>Clave ficticia<input name="clave" value="{{ password }}" maxlength="160" autocomplete="off"></label><label>Modo<select name="modo"><option value="ambos" {% if mode=='ambos' %}selected{% endif %}>Comparar ambos</option><option value="vulnerable" {% if mode=='vulnerable' %}selected{% endif %}>Vulnerable</option><option value="seguro" {% if mode=='seguro' %}selected{% endif %}>Seguro</option></select></label></div>
+<button type="submit">Ejecutar mi entrada</button><p>O ejecuta un caso preparado (reemplaza ambos campos):</p><div class="buttons">{% for key, case in cases.items() %}<button class="secondary" name="caso" value="{{ key }}">{{ case[0] }}</button>{% endfor %}</div></form>
+{% if message %}<p role="alert">{{ message }}</p>{% endif %}</section>
+{% if results %}<h2>2. Observa y compara</h2><div class="comparison">{% for r in results %}<section class="result {{ r.mode }}"><h3>{{ 'Consulta vulnerable' if r.mode=='vulnerable' else 'Consulta parametrizada segura' }}</h3>
+<p class="tag">{{ 'CONCATENACIÓN INTENCIONAL' if r.mode=='vulnerable' else 'ESTRUCTURA Y DATOS SEPARADOS' }}</p>
+<h4>SQL enviado a SQLite</h4><pre>{{ r.sql }}</pre>
+{% if r.mode=='seguro' %}<h4>Parámetros enviados por separado</h4><pre>{{ r.params | tojson }}</pre><p>Los valores no se interpolan en el texto anterior.</p>{% endif %}
+<div class="metrics"><p><strong>{{ r.rows|length }}</strong><br>filas devueltas</p><p><strong>{{ r.expected }}</strong><br>coincidencias literales</p><p><strong>{{ r.elapsed }} ms</strong><br>consulta medida</p></div>
+<p><strong>{{ 'Consulta rechazada' if r.error else ('Acceso simulado concedido' if r.rows else 'Acceso simulado denegado') }}</strong></p><p>Omisión de la clave observada: <strong>{{ 'Sí' if r.bypass else 'No' }}</strong></p>
+{% if r.error %}<pre role="alert">{{ r.error }}</pre>{% endif %}
+{% if r.rows %}<div class="table"><table><thead><tr><th>ID</th><th>Usuario</th><th>Rol ficticio</th></tr></thead><tbody>{% for row in r.rows %}<tr><td>{{ row.id }}</td><td>{{ row.usuario }}</td><td>{{ row.rol }}</td></tr>{% endfor %}</tbody></table></div>{% endif %}
+{% if r.truncated %}<p>Resultado limitado a 20 filas.</p>{% endif %}<p>{{ r.explanation }}</p></section>{% endfor %}</div>{% endif %}
+<section><h2>3. Explica lo que ocurrió</h2><p>¿Qué parte de la entrada pasó a ser una instrucción? ¿Qué fragmento queda comentado? ¿Por qué la misma entrada devuelve cero filas al usar parámetros?</p><p>Los indicadores corresponden a consultas reales sobre datos ficticios. “Acceso” es una interpretación educativa de las filas obtenidas: no se crea una sesión de usuario ni una autenticación real. El tiempo varía entre equipos y no mide la seguridad.</p></section>
+<footer>Laboratorio SQLi · Sin servicios externos · Detener con Ctrl+C · Consulta la guía README.md</footer>
+</main></body></html>
