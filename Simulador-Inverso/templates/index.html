@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>C2 Lab - Simulador de Comunicación Inversa y Monitoreo</title>
+    <link rel="stylesheet" href="/static/style.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <header class="navbar">
+        <div class="logo">
+            <span class="icon">🛡️</span>
+            <div>
+                <h1>C2 Reverse Communication Lab</h1>
+                <p class="subtitle">Monitoreo de Eventos y Análisis de Tráfico TCP Local</p>
+            </div>
+        </div>
+        <div class="header-status">
+            <div id="connection-pill" class="status-pill offline">
+                <span class="dot"></span>
+                <span id="connection-text">Desconectado</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Métricas Rápidas -->
+        <section class="metrics-grid">
+            <div class="metric-card">
+                <h3>Total Eventos</h3>
+                <p id="stat-total" class="metric-val">0</p>
+            </div>
+            <div class="metric-card">
+                <h3>Operaciones Normales</h3>
+                <p id="stat-normal" class="metric-val text-success">0</p>
+            </div>
+            <div class="metric-card">
+                <h3>Alertas Detectadas</h3>
+                <p id="stat-alerts" class="metric-val text-warning">0</p>
+            </div>
+            <div class="metric-card">
+                <h3>Eventos Críticos</h3>
+                <p id="stat-critical" class="metric-val text-danger">0</p>
+            </div>
+        </section>
+
+        <!-- Layout Central: Controles + Última Respuesta -->
+        <div class="main-grid">
+            <!-- Panel de Envío de Instrucciones -->
+            <section class="card control-panel">
+                <div class="card-header">
+                    <h2>🎮 Instrucciones Predefinidas (RF-05)</h2>
+                    <span class="badge">TCP Sockets (127.0.0.1:9000)</span>
+                </div>
+                <p class="card-desc">Seleccione una instrucción autorizada o simule un evento anómalo para auditoría:</p>
+
+                <div class="actions-grid">
+                    <button class="btn btn-primary" onclick="sendCommand('STATUS')">
+                        <span class="btn-icon">📡</span>
+                        <div>
+                            <strong>Consultar Estado (RF-05)</strong>
+                            <small>Sondea telemetría y salud del agente</small>
+                        </div>
+                    </button>
+
+                    <button class="btn btn-warning" onclick="sendCommand('SIMULATE_DEVICE_ACTION')">
+                        <span class="btn-icon">🔌</span>
+                        <div>
+                            <strong>Simular Dispositivo (RF-08)</strong>
+                            <small>Emula alternancia de bloqueo USB</small>
+                        </div>
+                    </button>
+
+                    <button class="btn btn-danger" onclick="sendCommand('SIMULATE_SHUTDOWN')">
+                        <span class="btn-icon">⚠️</span>
+                        <div>
+                            <strong>Simular Apagado (RF-07)</strong>
+                            <small>Genera alerta crítica sin afectar el OS</small>
+                        </div>
+                    </button>
+
+                    <button class="btn btn-dark" onclick="sendCustomInvalidCommand()">
+                        <span class="btn-icon">🚫</span>
+                        <div>
+                            <strong>Instrucción Inválida (RF-14)</strong>
+                            <small>Verifica rechazo de comandos anómalos</small>
+                        </div>
+                    </button>
+                </div>
+
+                <!-- Envío de Mensaje de Texto Personalizado -->
+                <div class="text-message-box">
+                    <label for="text-param"><strong>💬 Enviar Mensaje de Texto al Agente (RF-09):</strong></label>
+                    <div class="input-group">
+                        <input type="text" id="text-param" placeholder="Escribe un mensaje seguro..." value="Prueba de comunicación educativa TCP.">
+                        <button class="btn btn-secondary" onclick="sendTextMessage()">Enviar Texto</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Consola de Telemetría y Respuestas Recientes -->
+            <section class="card telemetry-panel">
+                <div class="card-header">
+                    <h2>📟 Respuesta del Agente (RF-06)</h2>
+                    <span id="response-timestamp" class="timestamp">En espera...</span>
+                </div>
+                <div class="terminal-view">
+                    <pre id="response-content">{"info": "Esperando ejecución de instrucciones..."}</pre>
+                </div>
+                <div class="connection-meta">
+                    <p><strong>Socket Controlador:</strong> <code id="meta-server">127.0.0.1:9000</code></p>
+                    <p><strong>Socket Agente:</strong> <code id="meta-agent">No conectado</code></p>
+                </div>
+            </section>
+        </div>
+
+        <!-- Tabla de Eventos y Auditoría -->
+        <section class="card audit-panel">
+            <div class="card-header table-header">
+                <div>
+                    <h2>📜 Bitácora de Eventos y Monitoreo (RF-10, RF-11)</h2>
+                    <p class="card-desc">Historial en tiempo real de operaciones y alertas defensivas</p>
+                </div>
+                <div class="header-actions">
+                    <a href="/api/export-csv" class="btn btn-outline" download>
+                        📥 Exportar CSV (RF-13)
+                    </a>
+                    <button class="btn btn-outline" onclick="clearLogs()">
+                        🗑️ Limpiar Bitácora
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Fecha y Hora</th>
+                            <th>Evento</th>
+                            <th>Instrucción</th>
+                            <th>Origen</th>
+                            <th>Destino</th>
+                            <th>Categoría</th>
+                            <th>Nivel</th>
+                            <th>Detalles / Observaciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="events-table-body">
+                        <tr>
+                            <td colspan="9" class="text-center">Cargando bitácora de eventos...</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </main>
+
+    <footer>
+        <p>Laboratorio Educativo de Ciberseguridad | Comunicación Inversa TCP & Flask | Actividad Práctica</p>
+    </footer>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
