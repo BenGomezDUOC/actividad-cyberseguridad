@@ -1,6 +1,6 @@
 """
 event_manager.py
-Gestor centralizado de eventos, clasificación de severidad y exportación CSV.
+Gestor de eventos y alertas de seguridad para el laboratorio defensivo C2.
 Cumple con RF-10, RF-11 y RF-13.
 """
 
@@ -12,13 +12,50 @@ from typing import List, Dict, Any, Optional
 
 class EventManager:
     """
-    Administrador thread-safe de registros de auditoría y alertas de seguridad.
+    Gestor de eventos y alertas de seguridad.
+    RF-10: Registrar cada evento con fecha y hora.
+    RF-11: Distinguir eventos normales de alertas.
+    RF-13: Exportar los registros en formato CSV.
     """
     def __init__(self):
-        self._events: List[Dict[str, Any]] = []
-        self._counter: int = 1
         self._lock = threading.Lock()
+        self.events: List[Dict[str, Any]] = []
+        self._counter = 1
 
+    def log_event(
+        self,
+        event_type: str,
+        command: str,
+        source: str,
+        destination: str,
+        category: str,
+        level: str,
+        details: str,
+        response: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Registra un evento en memoria con marca de tiempo.
+        category: 'NORMAL', 'ALERTA'
+        level: 'INFO', 'WARNING', 'CRITICAL', etc.
+        """
+        with self._lock:
+            event = {
+                "id": self._counter,
+                "timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "event_type": event_type,
+                "command": command,
+                "source": source,
+                "destination": destination,
+                "category": category,
+                "level": level,
+                "details": details,
+                "response": response or ""
+            }
+            self._counter += 1
+            self.events.append(event)
+            return event
+
+    # Compatibilidad con alias
     def record_event(
         self,
         tipo: str,
@@ -30,91 +67,62 @@ class EventManager:
         es_alerta: bool = False,
         justificacion_defensiva: str = "Operación normal del sistema"
     ) -> Dict[str, Any]:
-        """
-        Registra un evento con marca temporal y clasificación de seguridad.
-        """
-        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        
-        with self._lock:
-            event = {
-                "id": self._counter,
-                "timestamp": timestamp,
-                "tipo": tipo.upper(),
-                "origen": origen.upper(),
-                "destino": destino.upper(),
-                "comando": comando.upper() if comando else "N/A",
-                "descripcion": descripcion,
-                "severidad": severidad.upper(),
-                "es_alerta": es_alerta,
-                "justificacion_defensiva": justificacion_defensiva
-            }
-            self._events.append(event)
-            self._counter += 1
-            return event
+        category = "ALERTA" if es_alerta else "NORMAL"
+        return self.log_event(
+            event_type=tipo,
+            command=comando,
+            source=origen,
+            destination=destino,
+            category=category,
+            level=severidad,
+            details=descripcion,
+            response=justificacion_defensiva
+        )
 
-    def get_events(self, limit: Optional[int] = None, alerts_only: bool = False) -> List[Dict[str, Any]]:
-        """
-        Retorna la lista de eventos registrados, opcionalmente filtrada por alertas.
-        """
+    def get_events(self, limit: Optional[int] = None) -> List[Dict[str, Any]]:
+        """Retorna los eventos registrados ordenados de más reciente a más antiguo."""
         with self._lock:
-            events_copy = list(self._events)
-            
-        if alerts_only:
-            events_copy = [e for e in events_copy if e["es_alerta"]]
-            
-        events_copy.reverse()  # Más recientes primero
-        
-        if limit:
-            return events_copy[:limit]
-        return events_copy
+            if limit:
+                return list(reversed(self.events[-limit:]))
+            return list(reversed(self.events))
 
-    def get_stats(self) -> Dict[str, int]:
-        """
-        Retorna estadísticas rápidas de eventos y alertas.
-        """
+    def get_stats(self) -> Dict[str, Any]:
+        """Retorna contadores de métricas de seguridad para el dashboard."""
         with self._lock:
-            total = len(self._events)
-            alerts = sum(1 for e in self._events if e["es_alerta"])
-            critical = sum(1 for e in self._events if e["severidad"] == "CRITICA")
-            warning = sum(1 for e in self._events if e["severidad"] == "ADVERTENCIA")
+            total = len(self.events)
+            alerts = sum(1 for e in self.events if e["category"] == "ALERTA")
             normal = total - alerts
+            critical = sum(1 for e in self.events if e["level"] == "CRITICAL")
             return {
                 "total": total,
+                "normal": normal,
                 "alerts": alerts,
-                "critical": critical,
-                "warning": warning,
-                "normal": normal
+                "critical": critical
             }
 
-    def export_to_csv_string(self) -> str:
-        """
-        Genera el contenido CSV con todos los eventos registrados conforme a RFC 4180.
-        """
-        output = io.StringIO()
-        fieldnames = [
-            "id",
-            "timestamp",
-            "tipo",
-            "origen",
-            "destino",
-            "comando",
-            "descripcion",
-            "severidad",
-            "es_alerta",
-            "justificacion_defensiva"
-        ]
-        
-        writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
-        writer.writeheader()
-        
-        with self._lock:
-            for event in self._events:
-                writer.writerow(event)
-                
-        return output.getvalue()
-
     def clear(self):
-        """Limpia el historial de eventos."""
+        """Limpia la bitácora de eventos."""
         with self._lock:
-            self._events.clear()
+            self.events.clear()
             self._counter = 1
+
+    def export_csv(self) -> str:
+        """
+        Exporta todos los registros en formato CSV conforme a RFC 4180.
+        """
+        with self._lock:
+            output = io.StringIO()
+            fieldnames = [
+                "id", "timestamp", "event_type", "command",
+                "source", "destination", "category", "level",
+                "details", "response"
+            ]
+            writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
+            writer.writeheader()
+            for evt in self.events:
+                writer.writerow(evt)
+            return output.getvalue()
+
+    def export_to_csv_string(self) -> str:
+        """Alias para export_csv."""
+        return self.export_csv()

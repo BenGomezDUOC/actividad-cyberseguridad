@@ -1,5 +1,6 @@
 import time
 import threading
+import os
 from controller import ControllerServer
 from agent import SimulatedAgent
 from event_manager import EventManager
@@ -51,11 +52,12 @@ def run_lab_session():
     
     # Exportar CSV real
     csv_data = em.export_csv()
-    with open("c:/Users/Fernando/Documents/code/actividad-cyberseguridad/Simulador-Inverso/evidencias_eventos.csv", "w", encoding="utf-8") as f:
+    csv_path = os.path.join(os.path.dirname(__file__), "evidencias_eventos.csv")
+    with open(csv_path, "w", encoding="utf-8") as f:
         f.write(csv_data)
     
     server.stop()
-    print("[+] Evidencias generadas exitosamente en 'Simulador-Inverso/evidencias_eventos.csv'.")
+    print(f"[+] Evidencias generadas exitosamente en: '{csv_path}'.")
 
 if __name__ == "__main__":
     run_lab_session()
